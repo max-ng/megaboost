@@ -1,0 +1,5 @@
+numpy==1.23.3
+Pillow==9.4.0
+scikit_learn==1.2.0
+torch==1.12.1
+torchvision==0.13.1
