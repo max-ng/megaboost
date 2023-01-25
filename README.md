@@ -91,7 +91,7 @@ You can find the colab demo [here](https://colab.research.google.com/drive/1SKVz
 
  maxnghello at gmail.com
 
-Follow me on Medium: [@medium](https://twitter.com/your_username)
+Follow me on Medium: [@medium.data.scientist](https://medium.com/@data.scientist)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
