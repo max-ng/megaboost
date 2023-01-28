@@ -4,6 +4,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.models as models
 
 
 class ModelEMA(nn.Module):
@@ -189,6 +190,23 @@ def initialize_model(args):
 
         print(f"Model: WideResNet {depth}-{widen_factor}")
         # print(f"Total params: {sum(p.numel() for p in model.parameters())/1e6:.2f}M")
-        return model
+
+    elif args.model == "efficientnet-b1":
+        weight = models.EfficientNet_B1_Weights.IMAGENET1K_V2
+        model = models.efficientnet_b1(weights=weight)
+
     else:
         print("This model is not support yet.")
+
+    return model
+
+
+
+
+
+
+
+
+
+
+

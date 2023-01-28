@@ -282,7 +282,7 @@ def train_loop(args, labeled_loader, unlabeled_loader, test_loader, model, avg_m
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if epoch % args.print_freq == 0:
+            if epoch % args.print_freq == 0 or epoch == args.epochs - 1:
                 print('Epoch: [{0}]\t'
                       'Elapsed: {batch_time.val:.3f}s ({batch_time.avg:.3f}s)\t'
                       'Loss: {loss.val:.4f} {t_loss: .4f} \t'
@@ -291,7 +291,7 @@ def train_loop(args, labeled_loader, unlabeled_loader, test_loader, model, avg_m
                         loss=losses, top1=top1s, t_loss=t_loss.float().item()))
                 # print("   Epoch total time: {total_time:.3f}s".format(total_time=time.time()-start))
 
-            if epoch % 1000 == 0 or epoch == args.epochs:
+            if epoch % args.eval_step == 0 or epoch == args.epochs - 1:
                 # top1 = validate_old(args, test_loader, model, criterion)
                 test_model = avg_model if avg_model is not None else model
                 top1 = validate(args, test_loader, test_model, criterion)
@@ -317,6 +317,107 @@ def train_loop(args, labeled_loader, unlabeled_loader, test_loader, model, avg_m
                         'best_top1': best_top1,
                         'first_optimizer': first_optimizer.state_dict(),
                         'second_optimizer': second_optimizer.state_dict(),
+                        'avg_state_dict': avg_model.state_dict() if avg_model is not None else None
+                    }, is_best, filename=os.path.join(args.save_dir, 'best.th'))
+
+def train_basic(args, labeled_loader, test_loader, model, avg_model, criterion, first_optimizer, first_scheduler, first_scaler, best_top1):
+    moving_dot_product = torch.empty(1).to(args.device)
+    limit = 3.0**(0.5)  # 3 = 6 / (f_in + f_out)
+    nn.init.uniform_(moving_dot_product, -limit, limit)
+
+    model.zero_grad()
+
+    labeled_iter = iter(labeled_loader)
+
+    batch_time = AverageMeter()
+    losses = AverageMeter()
+    top1s = AverageMeter()
+    
+    start = time.time()
+    end = time.time()
+
+    for epoch in range(args.start_epoch, args.epochs):
+            model.train()
+            try:
+                images_l, target = next(labeled_iter)
+            except:
+                labeled_iter = iter(labeled_loader)
+                images_l, target = next(labeled_iter)
+
+            images_l = images_l.to(args.device)
+            target = target.to(args.device)
+
+            if args.ema > 0:
+                avg_model.update_parameters(model)
+
+            with amp.autocast(enabled=args.amp):
+                output = model(images_l)
+                t_loss = criterion(output, target)
+
+            if args.amp:
+                first_scaler.scale(t_loss).backward()
+            else:
+                t_loss.requires_grad_(True)
+                t_loss.backward()
+
+            if args.grad_clip > 0:
+                first_scaler.unscale_(first_optimizer)
+                nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+
+            if args.amp:
+                first_scaler.step(first_optimizer)
+                first_scaler.update()
+            else:
+                first_optimizer.step()
+
+            first_scheduler.step()
+
+            model.zero_grad()
+
+            output = output.detach().float()
+            loss = t_loss.float()
+            # Measure accuracy and record loss
+            top1 = accuracy(output.data, target)[0]
+            losses.update(loss.item(), target.size(0))
+            top1s.update(top1.item(), target.size(0))
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            if epoch % args.print_freq == 0 or epoch == args.epochs - 1:
+                print('Epoch: [{0}]\t'
+                      'Elapsed: {batch_time.val:.3f}s ({batch_time.avg:.3f}s)\t'
+                      'Loss: {loss.val:.4f} {t_loss: .4f} \t'
+                      'Top1 Accuracy: {top1.val:.3f}% '.format(
+                          epoch, batch_time=batch_time,
+                        loss=losses, top1=top1s, t_loss=t_loss.float().item()))
+                # print("   Epoch total time: {total_time:.3f}s".format(total_time=time.time()-start))
+
+            if epoch % args.eval_step == 0 or epoch == args.epochs - 1:
+                # top1 = validate_old(args, test_loader, model, criterion)
+                test_model = avg_model if avg_model is not None else model
+                top1 = validate(args, test_loader, test_model, criterion)
+                is_best = top1 >= best_top1
+                best_top1 = max(top1, best_top1)
+
+                print(f"    Best top-1 acc: {best_top1:.2f}%")
+
+                if epoch > 0 and epoch % args.save_every == 0:
+                    save_checkpoint({
+                        'epoch': epoch + 1,
+                        'state_dict': model.state_dict(),
+                        'best_top1': best_top1,
+                        'first_optimizer': first_optimizer.state_dict(),
+                        'avg_state_dict': avg_model.state_dict() if avg_model is not None else None
+                    }, is_best, filename=os.path.join(args.save_dir, 'checkpoint.th'))
+
+                if is_best:
+                    save_checkpoint({
+                        'epoch': epoch + 1,
+                        'state_dict': model.state_dict(),
+                        'best_top1': best_top1,
+                        'first_optimizer': first_optimizer.state_dict(),
                         'avg_state_dict': avg_model.state_dict() if avg_model is not None else None
                     }, is_best, filename=os.path.join(args.save_dir, 'best.th'))
 

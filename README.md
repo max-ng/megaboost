@@ -72,6 +72,8 @@ Import the libraries:
 
 You can find the colab demo [here](https://colab.research.google.com/drive/1SKVzkZGFdtZ8uJz-ubSa3aTf5lWCqBcM?usp=sharing). 
 
+[MegaBoost Tutorial 1: Fine-tune Image Classification Model](https://colab.research.google.com/drive/1tVL_Z6Dsi9lNOCanRcuXCboyrdTS2q9w?usp=sharing)
+
 <!-- ROADMAP -->
 ## Roadmap
 
